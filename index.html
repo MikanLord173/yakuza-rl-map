@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="zh-TW" class="h-full bg-slate-950 text-slate-100">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>人中之龍 聖地巡禮地圖 (Yakuza Pilgrimage Map)</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Leaflet CSS & JS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Noto Sans TC"', 'sans-serif'],
+          },
+          colors: {
+            yakuza: {
+              red: '#dc2626',
+              gold: '#f59e0b',
+              blue: '#0284c7',
+              dark: '#0f172a',
+              card: '#1e293b'
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    /* Custom Scrollbars */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #0f172a;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #475569;
+    }
+
+    /* Dark Mode Filter for OpenStreetMap Tile Layer */
+    .dark-tiles .leaflet-tile {
+      filter: brightness(0.6) invert(1) contrast(3) hue-rotate(200deg) saturate(0.3) brightness(0.7);
+    }
+
+    /* Custom Leaflet Popup Styling */
+    .leaflet-popup-content-wrapper, .leaflet-popup-tip {
+      background-color: #1e293b !important;
+      color: #f8fafc !important;
+      border: 1px solid #334155;
+      border-radius: 0.75rem !important;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.6) !important;
+    }
+    .leaflet-popup-content {
+      margin: 12px 16px !important;
+      line-height: 1.5;
+    }
+    
+    .dragon-header {
+      background: linear-gradient(135deg, #7f1d1d 0%, #1e293b 70%, #0f172a 100%);
+    }
+  </style>
+</head>
+<body class="h-full flex flex-col font-sans overflow-hidden bg-slate-950 text-slate-100">
+
+  <!-- HEADER NAVBAR -->
+  <header class="bg-slate-900 border-b border-slate-800 z-30 flex-shrink-0 shadow-xl">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex flex-col md:flex-row items-center justify-between gap-3">
+      
+      <!-- Brand Logo & Title -->
+      <div class="flex items-center gap-3 w-full md:w-auto justify-between md:justify-start">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-red-600 to-amber-500 flex items-center justify-center text-white shadow-lg shadow-red-900/50">
+            <i class="fa-solid text-xl font-black">龍</i>
+          </div>
+          <div>
+            <h1 class="text-lg sm:text-xl font-extrabold tracking-wide text-white flex items-center gap-2">
+              龍が如く <span class="text-red-500 font-black">人中之龍</span> 聖地巡禮地圖
+            </h1>
+            <p class="text-xs text-slate-400 hidden sm:block">神室町 (東京新宿) · 蒼天掘 (大阪道頓堀) · 異人町 (橫濱)</p>
+          </div>
+        </div>
+
+        <!-- Mobile View Toggle Button -->
+        <button id="mobileViewToggleBtn" onclick="toggleMobileView()" class="md:hidden px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-medium border border-slate-700 flex items-center gap-1.5">
+          <i class="fa-solid fa-list-ul" id="toggleIcon"></i>
+          <span id="toggleText">切換列表</span>
+        </button>
+      </div>
+
+      <!-- Region Filter Tabs -->
+      <div class="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800 w-full md:w-auto overflow-x-auto">
+        <button onclick="switchTab('ALL')" id="tab-ALL" class="tab-btn px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-bold transition-all bg-red-600 text-white shadow">
+          <i class="fa-solid fa-globe mr-1"></i>全部區域
+        </button>
+        <button onclick="switchTab('新宿')" id="tab-新宿" class="tab-btn px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-bold text-slate-400 hover:text-slate-200 transition-all">
+          <i class="fa-solid fa-city mr-1 text-red-500"></i>新宿 (神室町)
+        </button>
+        <button onclick="switchTab('大阪')" id="tab-大阪" class="tab-btn px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-bold text-slate-400 hover:text-slate-200 transition-all">
+          <i class="fa-solid fa-utensils mr-1 text-amber-500"></i>大阪 (蒼天掘)
+        </button>
+        <button onclick="switchTab('橫濱')" id="tab-橫濱" class="tab-btn px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-bold text-slate-400 hover:text-slate-200 transition-all">
+          <i class="fa-solid fa-anchor mr-1 text-sky-500"></i>橫濱 (異人町)
+        </button>
+      </div>
+
+    </div>
+  </header>
+
+  <!-- MAIN WORKSPACE CONTAINER -->
+  <div class="flex-1 flex flex-col md:flex-row overflow-hidden relative">
+
+    <!-- LEFT SIDEBAR: Search & Spots List -->
+    <aside id="sidebar" class="w-full md:w-96 lg:w-[380px] bg-slate-900 border-r border-slate-800 flex flex-col z-20 transition-all duration-300 h-full">
+      
+      <!-- Search Bar & Counter -->
+      <div class="p-3.5 border-b border-slate-800 bg-slate-900/95 space-y-2.5">
+        <div class="relative">
+          <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 text-sm"></i>
+          <input type="text" id="searchInput" oninput="handleSearch()" placeholder="搜尋景點、現實或原作名稱..." class="w-full bg-slate-950 text-slate-100 placeholder-slate-500 text-sm rounded-xl pl-10 pr-4 py-2 border border-slate-800 focus:outline-none focus:border-red-500 transition-colors" />
+        </div>
+
+        <div class="flex items-center justify-between text-xs text-slate-400 px-1">
+          <span id="spotsCount">載入景點中...</span>
+          <span class="text-slate-500"><i class="fa-solid fa-mouse-pointer mr-1"></i>點擊卡片定位</span>
+        </div>
+      </div>
+
+      <!-- List Container -->
+      <div id="spotsList" class="flex-1 overflow-y-auto p-3 space-y-2.5">
+        <!-- Dynamic Cards -->
+      </div>
+    </aside>
+
+    <!-- RIGHT: MAP CANVAS -->
+    <main class="flex-1 relative h-full w-full bg-slate-950">
+      <div id="map" class="h-full w-full z-10 dark-tiles"></div>
+
+      <!-- Map Legend Overlay -->
+      <div class="absolute bottom-5 right-5 z-20 bg-slate-900/90 backdrop-blur-md border border-slate-800 rounded-xl p-3 shadow-xl hidden sm:block text-xs space-y-2">
+        <div class="font-bold text-slate-300 border-b border-slate-800 pb-1">區域大頭針圖例</div>
+        <div class="flex items-center gap-2">
+          <span class="w-3 h-3 rounded-full bg-red-600 inline-block shadow-sm shadow-red-500"></span>
+          <span class="text-slate-300">新宿 (神室町)</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="w-3 h-3 rounded-full bg-amber-500 inline-block shadow-sm shadow-amber-500"></span>
+          <span class="text-slate-300">大阪 (蒼天掘)</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="w-3 h-3 rounded-full bg-sky-500 inline-block shadow-sm shadow-sky-500"></span>
+          <span class="text-slate-300">橫濱 (伊勢佐木異人町)</span>
+        </div>
+      </div>
+    </main>
+
+  </div>
+
+  <!-- SPOT DETAIL MODAL -->
+  <div id="detailModal" class="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4 opacity-0 pointer-events-none transition-all duration-300">
+    <div id="modalCard" class="bg-slate-900 border border-slate-800 rounded-2xl max-w-xl w-full max-h-[90vh] overflow-y-auto shadow-2xl transform scale-95 transition-all duration-300 relative text-slate-100">
+      
+      <!-- Modal Header -->
+      <div class="p-6 relative border-b border-slate-800 dragon-header">
+        <button onclick="closeModal()" class="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-colors">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+        
+        <div class="flex items-center gap-2 mb-2">
+          <span id="modalRegionBadge" class="px-2.5 py-0.5 rounded-full text-xs font-bold uppercase"></span>
+          <span id="modalCategoryBadge" class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-800 text-slate-300 border border-slate-700"></span>
+        </div>
+        <h2 id="modalRealName" class="text-2xl font-black text-white tracking-wide"></h2>
+        <p class="text-sm text-red-400 font-semibold flex items-center gap-1.5 mt-1">
+          <i class="fa-solid fa-gamepad"></i> 原作對應地點：<span id="modalGameName" class="font-bold underline decoration-red-500/50"></span>
+        </p>
+      </div>
+
+      <!-- Modal Content Body -->
+      <div class="p-6 space-y-5">
+        
+        <!-- Address & Direct Google Map Navigation Link -->
+        <div class="flex items-start gap-3 bg-slate-950 p-3.5 rounded-xl border border-slate-800">
+          <i class="fa-solid fa-map-pin text-red-500 text-lg mt-0.5"></i>
+          <div class="flex-1">
+            <div class="text-xs text-slate-400 font-medium">現實地址</div>
+            <div id="modalAddress" class="text-sm font-medium text-slate-200 mt-0.5"></div>
+          </div>
+          <a id="modalGMapBtn" href="#" target="_blank" class="px-3 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-md shadow-blue-900/30 transition-all flex-shrink-0">
+            <i class="fa-solid fa-arrow-up-right-from-square"></i> Google 地圖導航
+          </a>
+        </div>
+
+        <!-- Description -->
+        <div>
+          <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2 flex items-center gap-1.5">
+            <i class="fa-solid fa-book-open text-red-400"></i> 景點簡介與聖地典故
+          </h3>
+          <p id="modalDescription" class="text-sm text-slate-300 leading-relaxed bg-slate-950/60 p-4 rounded-xl border border-slate-800/80"></p>
+        </div>
+
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="p-4 bg-slate-950 border-t border-slate-800 flex justify-between items-center text-xs text-slate-400 rounded-b-2xl">
+        <span>人中之龍 聖地巡禮 Guide</span>
+        <button onclick="closeModal()" class="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium rounded-lg transition-colors">
+          關閉
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    // 31 Pilgrimage Spots strict CSV Dataset
+    const spotsData = [
+      // 東京新宿 (Kamurocho)
+      { id: 1, region: "新宿", realName: "歌舞伎町一番街", gameName: "天下一通り入口牌樓", category: "地標門樓", lat: 35.6942, lng: 139.7016, address: "東京都新宿區歌舞伎町1丁目", desc: "《人中之龍》系列最經典的地標！紅底金字的大型門樓，是桐生一馬與春日一番進入神室町的核心入口。" },
+      { id: 2, region: "新宿", realName: "ドン・キホーテ 新宿東口本店", gameName: "唐吉訶德 神室町店", category: "綜合賣場", lat: 35.6938, lng: 139.7013, address: "東京都新宿區歌舞伎町1-16-5", desc: "位於天下一通り與靖國通交界處，玩家購買道具、精力飲料與裝備補給的最重要連鎖賣場。" },
+      { id: 3, region: "新宿", realName: "風林會館", gameName: "風林會館 / 地下賭場", category: "商業大樓", lat: 35.6953, lng: 139.7037, address: "東京都新宿區歌舞伎町2-23-1", desc: "歌舞伎町歷史悠久的綜合商業大樓，遊戲中常作為幫派密會與地下賭場事件集中的場所。" },
+      { id: 4, region: "新宿", realName: "新宿バッティングセンター", gameName: "吉田打擊練習場", category: "娛樂設施", lat: 35.6955, lng: 139.7040, address: "東京都新宿區歌舞伎町2-21-13", desc: "玩家進行棒球迷你遊戲的經典地點。在《人中之龍1》中，真島吾朗在此與桐生進行狂氣決鬥。" },
+      { id: 5, region: "新宿", realName: "新宿東寶ビル", gameName: "神室劇場 / 劇場前廣場", category: "廣場地標", lat: 35.6951, lng: 139.7022, address: "東京都新宿區歌舞伎町1-19-1", desc: "原新宿哥瑪劇場，遊戲中對應「劇場前廣場」，周邊常觸發大量支線任務與幫派衝突。" },
+      { id: 6, region: "新宿", realName: "まつやフーズ（松屋 新宿店）", gameName: "松屋 神室町店", category: "連鎖餐飲", lat: 35.6935, lng: 139.7020, address: "東京都新宿區歌舞伎町1-17-2", desc: "日本著名連鎖牛丼專賣店，遊戲內完美聯名合作，提供平價牛丼讓主角恢復血量。" },
+      { id: 7, region: "新宿", realName: "九州ラーメン 豚骨ラーメン", gameName: "九州一番星", category: "特色美食", lat: 35.6948, lng: 139.7027, address: "東京都新宿區歌舞伎町1丁目", desc: "神室町公園前通的老牌九州豚骨拉麵店，地下室曾隱藏著賭博場景的入口。" },
+      { id: 8, region: "新宿", realName: "GiGO 新宿歌舞伎町", gameName: "Club SEGA 神室町店", category: "電子遊樂場", lat: 35.6950, lng: 139.7029, address: "東京都新宿區歌舞伎町1-21-1", desc: "原 Club SEGA，提供各類懷舊大型電玩真機（如 VR 快打）與夾娃娃機小遊戲。" },
+      { id: 9, region: "新宿", realName: "韓々正式（韓國燒肉店區）", gameName: "韓來 (Hanrai) 燒肉店", category: "特色美食", lat: 35.6957, lng: 139.7035, address: "東京都新宿區歌舞伎町2-22-1", desc: "神室町極具名氣的高級韓國燒肉店，提供優質和牛燒肉，為主角補滿體力的美食首選。" },
+      { id: 10, region: "新宿", realName: "花道通り", gameName: "花頭通 (Hanamichi St.)", category: "特色街道", lat: 35.6946, lng: 139.7030, address: "東京都新宿區歌舞伎町1丁目", desc: "橫貫歌舞伎町東西兩側的主要巷弄，兩旁林立酒館與俱樂部，是黑幫角力的地帶。" },
+      { id: 11, region: "新宿", realName: "JR 新宿站 東南口 / 東口", gameName: "神室町車站入口", category: "交通樞紐", lat: 35.6896, lng: 139.7006, address: "東京都新宿區新宿3丁目", desc: "前往神室町的門戶，繁華的新宿玄關，也是許多主角搭車離開或來到神室町的起點。" },
+
+      // 大阪道頓堀 (Sotenbori)
+      { id: 12, region: "大阪", realName: "道頓堀川與戎橋", gameName: "蒼天掘川與毘沙門橋 / 戎橋", category: "地標橋樑", lat: 34.6687, lng: 135.5013, address: "大阪府大阪市中央區心齋橋筋1丁目", desc: "蒼天掘核心的大橋，橫跨運河。《人中之龍2》桐生與鄉田龍司決戰與《人中之龍0》真島登場的名場景。" },
+      { id: 13, region: "大阪", realName: "かに道樂 道頓堀本店", gameName: "蟹道樂 (Kani Doraku)", category: "特色美食", lat: 34.6687, lng: 135.5019, address: "大阪府大阪市中央區道頓堀1-6-18", desc: "門口巨大的會動巨型紅蟹招牌，是道頓堀最顯眼地標，遊戲中完美呈現。" },
+      { id: 14, region: "大阪", realName: "づぼらや（Zuboraya 河豚料理舊址）", gameName: "巨型河豚燈籠招牌", category: "懷舊地標", lat: 34.6686, lng: 135.5025, address: "大阪府大阪市中央區道頓堀1-6-10", desc: "懸掛巨大河豚氣球燈籠的河豚料理名店，遊戲將這座懷舊的關西地標永久保存了下來。" },
+      { id: 15, region: "大阪", realName: "元祖串かつ だるま 道頓堀店", gameName: "串炸達摩", category: "關西小吃", lat: 34.6686, lng: 135.5022, address: "大阪府大阪市中央區道頓堀1-6-4", desc: "嚴禁二次沾醬！立有嚴肅大叔雕像的串炸名店，主角們補充體力的好去處。" },
+      { id: 16, region: "大阪", realName: "大阪王將 道頓堀本店", gameName: "大阪王將", category: "特色美食", lat: 34.6686, lng: 135.5028, address: "大阪府大阪市中央區道頓堀1-6-13", desc: "巨大煎餃招牌非常醒目，提供道地的日式中華煎餃與炒飯料理。" },
+      { id: 17, region: "大阪", realName: "金龍ラーメン 道頓堀店", gameName: "金龍拉麵", category: "特色美食", lat: 34.6686, lng: 135.5031, address: "大阪府大阪市中央區道頓堀1-7-26", desc: "屋頂有立體巨龍雕刻，露天榻榻米座位與免費泡菜是道頓堀獨特的街頭風景。" },
+      { id: 18, region: "大阪", realName: "たこ家道頓堀くくる 本店", gameName: "章魚燒 くくる", category: "關西小吃", lat: 34.6686, lng: 135.5016, address: "大阪府大阪市中央區道頓堀1-7-9", desc: "牆上有一隻巨大章魚抓著章魚燒船，是蒼天掘不可或缺的道地關西美食名店。" },
+      { id: 19, region: "大阪", realName: "TSUTAYA EBISUBASHI / 戎橋ビル", gameName: "蒼天掘 戎橋影音大樓", category: "商業大樓", lat: 34.6685, lng: 135.5012, address: "大阪府大阪市中央區道頓堀1-8-19", desc: "聳立於戎橋頭的醒目大型商業大樓，是蒼天掘繁華街景的核心組成元素。" },
+      { id: 20, region: "大阪", realName: "味園ビル", gameName: "味園大樓 / 地下夜總會原型", category: "懷舊娛樂", lat: 34.6657, lng: 135.5052, address: "大阪府大阪市中央區千日前2-3-9", desc: "昭和時代的千日前懷舊娛樂大樓，其魔幻氛圍成為《人中之龍0》蒼天掘夜生活場景的設計靈感。" },
+      { id: 21, region: "大阪", realName: "法善寺橫丁", gameName: "招福町懷舊石板巷弄", category: "特色街道", lat: 34.6678, lng: 135.5022, address: "大阪府大阪市中央區難波1丁目", desc: "鋪滿石板路與掛滿燈籠的古樸巷弄，遊戲中藏有諸多小料理屋與將棋棋牌室。" },
+
+      // 橫濱異人町 (Ijincho)
+      { id: 22, region: "橫濱", realName: "伊勢佐木モール", gameName: "伊勢佐木大道", category: "商店街", lat: 35.4442, lng: 139.6322, address: "神奈川縣橫濱市中區伊勢佐木町", desc: "《人中之龍7》春日一番展開新生的主要商業徒步街，連接各類餐廳與打工英雄任務點。" },
+      { id: 23, region: "橫濱", realName: "橫濱中華街（善鄰門 / 朝陽門）", gameName: "中華街入口牌樓 / 橫濱流氓地盤", category: "地標門樓", lat: 35.4431, lng: 139.6453, address: "神奈川縣橫濱市中區山下町", desc: "趙天佑率領的「橫濱流氓」地盤，擁有精緻中華美食與宏偉的華麗牌樓。" },
+      { id: 24, region: "橫濱", realName: "山下公園", gameName: "濱北公園", category: "海濱公園", lat: 35.4458, lng: 139.6496, address: "神奈川縣橫濱市中區山下町279", desc: "異人町臨海的大型綠地公園，玩家可在此進行「撿空罐大賽」與「龍人賽車」賽車競速。" },
+      { id: 25, region: "橫濱", realName: "橫濱赤レンガ倉庫", gameName: "異人町 港灣紅磚倉庫", category: "歷史建築", lat: 35.4528, lng: 139.6428, address: "神奈川縣橫濱市中區新港1-1", desc: "橫濱港邊著名的懷舊紅磚建築，位於異人町地圖東北側港區。" },
+      { id: 26, region: "橫濱", realName: "大岡川沿岸", gameName: "櫻川沿岸", category: "自然河川", lat: 35.4435, lng: 139.6272, address: "神奈川縣橫濱市中區日之出町", desc: "貫穿異人町的河流，河岸邊設有流浪者營地，呈現出異人町獨特的包容文化。" },
+      { id: 27, region: "橫濱", realName: "ぴおシティ / 櫻木町地下街", gameName: "櫻川地下街", category: "地下商場", lat: 35.4502, lng: 139.6308, address: "神奈川縣橫濱市中區櫻木町1-1", desc: "櫻木町車站旁的懷舊地下商場，遊戲中還原了復古的地下居酒屋與店面。" },
+      { id: 28, region: "橫濱", realName: "橫濱コスモワールド", gameName: "奇蹟摩天輪公園", category: "主題樂園", lat: 35.4552, lng: 139.6369, address: "神奈川縣橫濱市中區新港2-8-1", desc: "擁有巨型大摩天輪的都市型遊樂園，勾勒出異人町壯麗的海港天際線。" },
+      { id: 29, region: "橫濱", realName: "JR 櫻木町站", gameName: "陣內車站", category: "交通樞紐", lat: 35.4507, lng: 139.6310, address: "神奈川縣橫濱市中區櫻木町1丁目", desc: "異人町的核心鐵路車站，分割了北側商業區與南側的生活住宅區。" },
+      { id: 30, region: "橫濱", realName: "橫濱長者町風俗街區", gameName: "乙姬樂園周邊 / 泡泡浴街", category: "特色風俗區", lat: 35.4428, lng: 139.6292, address: "神奈川縣橫濱市中區長者町", desc: "《人中之龍7》故事起點「乙姬樂園」所在地，野野宮店長與夥伴們最初交會處。" },
+      { id: 31, region: "橫濱", realName: "橫濱スタジアム", gameName: "陣內體育場", category: "體育場館", lat: 35.4433, lng: 139.6401, address: "神奈川縣橫濱市中區橫濱公園", desc: "座落於地圖中央的巨大棒球場地標，周邊公園景緻宜人。" }
+    ];
+
+    // Center coordinates for map navigation
+    const regionViews = {
+      ALL: { center: [35.2, 137.8], zoom: 7 },
+      新宿: { center: [35.6945, 139.7022], zoom: 16 },
+      大阪: { center: [34.6685, 135.5020], zoom: 16 },
+      橫濱: { center: [35.4450, 139.6380], zoom: 15 }
+    };
+
+    // Color definitions for Pins
+    const regionColors = {
+      "新宿": { bg: "#dc2626", border: "#991b1b", text: "神室町", icon: "fa-city" },
+      "大阪": { bg: "#f59e0b", border: "#b45309", text: "蒼天掘", icon: "fa-utensils" },
+      "橫濱": { bg: "#0284c7", border: "#0369a1", text: "異人町", icon: "fa-anchor" }
+    };
+
+    let map;
+    let markersLayerGroup;
+    let activeRegion = 'ALL';
+    let searchQuery = '';
+
+    // Create Custom HTML Marker Icon for Leaflet
+    function createCustomIcon(spot) {
+      const config = regionColors[spot.region] || { bg: "#dc2626", icon: "fa-location-dot" };
+      
+      const html = `
+        <div class="relative group cursor-pointer">
+          <div class="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-xs shadow-lg transform transition-transform group-hover:scale-125 border-2 border-slate-900" style="background-color: ${config.bg};">
+            <i class="fa-solid ${config.icon}"></i>
+          </div>
+          <div class="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 rotate-45 border-r border-b border-slate-900" style="background-color: ${config.bg};"></div>
+        </div>
+      `;
+
+      return L.divIcon({
+        html: html,
+        className: 'custom-leaflet-pin',
+        iconSize: [32, 32],
+        iconAnchor: [16, 32],
+        popupAnchor: [0, -32]
+      });
+    }
+
+    // Initialize Map with Standard OpenStreetMap Tile Layer
+    function initMap() {
+      map = L.map('map', {
+        zoomControl: false,
+        attributionControl: false
+      }).setView(regionViews.ALL.center, regionViews.ALL.zoom);
+
+      L.control.zoom({ position: 'topright' }).addTo(map);
+
+      // NO API KEY REQUIRED - STANDARD OPENSTREETMAP TILE LAYER
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; OpenStreetMap contributors'
+      }).addTo(map);
+
+      markersLayerGroup = L.layerGroup().addTo(map);
+
+      renderMapAndList();
+    }
+
+    // Render Markers & Cards based on Filters
+    function renderMapAndList() {
+      markersLayerGroup.clearLayers();
+
+      const filtered = spotsData.filter(spot => {
+        const matchesRegion = (activeRegion === 'ALL' || spot.region === activeRegion);
+        const q = searchQuery.toLowerCase();
+        const matchesSearch = !q || 
+          spot.realName.toLowerCase().includes(q) || 
+          spot.gameName.toLowerCase().includes(q) || 
+          spot.address.toLowerCase().includes(q) ||
+          spot.desc.toLowerCase().includes(q) ||
+          spot.category.toLowerCase().includes(q);
+        
+        return matchesRegion && matchesSearch;
+      });
+
+      document.getElementById('spotsCount').innerText = `顯示 ${filtered.length} / ${spotsData.length} 個景點`;
+
+      const listContainer = document.getElementById('spotsList');
+      listContainer.innerHTML = '';
+
+      if (filtered.length === 0) {
+        listContainer.innerHTML = `
+          <div class="text-center py-12 text-slate-500 space-y-2">
+            <i class="fa-solid fa-compass text-3xl"></i>
+            <p class="text-sm">沒有找到符合條件的聖地景點</p>
+          </div>
+        `;
+        return;
+      }
+
+      const bounds = L.latLngBounds();
+
+      filtered.forEach(spot => {
+        // Marker creation
+        const marker = L.marker([spot.lat, spot.lng], { icon: createCustomIcon(spot) });
+        
+        const popupHtml = `
+          <div class="space-y-1">
+            <div class="text-[10px] font-bold tracking-wider text-red-400 uppercase">${spot.region} · 原作：${spot.gameName}</div>
+            <div class="text-sm font-bold text-white">${spot.realName}</div>
+            <div class="text-xs text-slate-300 line-clamp-2">${spot.desc}</div>
+            <button onclick="openModal(${spot.id})" class="mt-2 text-xs w-full py-1 bg-red-600 hover:bg-red-500 text-white font-bold rounded flex items-center justify-center gap-1">
+              <i class="fa-solid fa-circle-info"></i> 詳細資料與導航
+            </button>
+          </div>
+        `;
+
+        marker.bindPopup(popupHtml);
+        marker.addTo(markersLayerGroup);
+        bounds.extend([spot.lat, spot.lng]);
+
+        // Sidebar Card creation
+        const config = regionColors[spot.region];
+        const card = document.createElement('div');
+        card.className = "p-3.5 bg-slate-950/80 hover:bg-slate-800 border border-slate-800/80 hover:border-slate-700 rounded-xl transition-all cursor-pointer group flex flex-col justify-between";
+        card.onclick = () => onCardClick(spot, marker);
+
+        card.innerHTML = `
+          <div>
+            <div class="flex items-start justify-between gap-2 mb-1.5">
+              <div class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full inline-block flex-shrink-0" style="background-color: ${config.bg}"></span>
+                <h3 class="text-sm font-bold text-slate-100 group-hover:text-red-400 transition-colors">${spot.realName}</h3>
+              </div>
+              <span class="text-[10px] px-2 py-0.5 rounded font-bold text-slate-300 bg-slate-800 border border-slate-700 flex-shrink-0">${spot.category}</span>
+            </div>
+
+            <div class="text-xs text-red-400 font-semibold mb-1 flex items-center gap-1">
+              <i class="fa-solid fa-gamepad text-[10px]"></i> 原作：${spot.gameName}
+            </div>
+
+            <p class="text-xs text-slate-400 line-clamp-2 mb-2 leading-relaxed">${spot.desc}</p>
+          </div>
+
+          <div class="flex items-center justify-between pt-2 border-t border-slate-800/60 text-[11px] text-slate-500">
+            <span class="truncate max-w-[200px]"><i class="fa-solid fa-location-dot mr-1"></i>${spot.address}</span>
+            <span class="text-slate-400 font-bold group-hover:translate-x-0.5 transition-transform">詳情 <i class="fa-solid fa-chevron-right text-[10px]"></i></span>
+          </div>
+        `;
+
+        listContainer.appendChild(card);
+      });
+
+      // Smooth Fit Bounds when changing tabs or searching
+      if (filtered.length > 0) {
+        if (activeRegion !== 'ALL') {
+          map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16, animate: true });
+        } else if (!searchQuery) {
+          map.setView(regionViews.ALL.center, regionViews.ALL.zoom, { animate: true });
+        } else {
+          map.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
+        }
+      }
+    }
+
+    // Switch Tab
+    function switchTab(region) {
+      activeRegion = region;
+
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('bg-red-600', 'text-white', 'shadow');
+        btn.classList.add('text-slate-400');
+      });
+
+      const activeBtn = document.getElementById(`tab-${region}`);
+      if (activeBtn) {
+        activeBtn.classList.add('bg-red-600', 'text-white', 'shadow');
+        activeBtn.classList.remove('text-slate-400');
+      }
+
+      renderMapAndList();
+    }
+
+    // Search Input Event Handler
+    function handleSearch() {
+      searchQuery = document.getElementById('searchInput').value.trim();
+      renderMapAndList();
+    }
+
+    // Card Selection
+    function onCardClick(spot, marker) {
+      map.flyTo([spot.lat, spot.lng], 17, { duration: 1.2 });
+      marker.openPopup();
+      
+      if (window.innerWidth < 768) {
+        toggleMobileView('map');
+      }
+    }
+
+    // Open Modal Function
+    function openModal(id) {
+      const spot = spotsData.find(s => s.id === id);
+      if (!spot) return;
+
+      const config = regionColors[spot.region];
+
+      document.getElementById('modalRealName').innerText = spot.realName;
+      document.getElementById('modalGameName').innerText = spot.gameName;
+      document.getElementById('modalAddress').innerText = spot.address;
+      document.getElementById('modalDescription').innerText = spot.desc;
+      document.getElementById('modalCategoryBadge').innerText = spot.category;
+
+      const badge = document.getElementById('modalRegionBadge');
+      badge.innerText = `${spot.region} 聖地`;
+      badge.style.backgroundColor = config.bg;
+      badge.style.color = '#ffffff';
+
+      // Google Maps Direct Search & Navigation Link (Query based)
+      const gmapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(spot.realName + ' ' + spot.address)}`;
+      document.getElementById('modalGMapBtn').href = gmapUrl;
+
+      const modal = document.getElementById('detailModal');
+      const card = document.getElementById('modalCard');
+      modal.classList.remove('opacity-0', 'pointer-events-none');
+      card.classList.remove('scale-95');
+      card.classList.add('scale-100');
+    }
+
+    // Close Modal
+    function closeModal() {
+      const modal = document.getElementById('detailModal');
+      const card = document.getElementById('modalCard');
+      modal.classList.add('opacity-0', 'pointer-events-none');
+      card.classList.remove('scale-100');
+      card.classList.add('scale-95');
+    }
+
+    // Mobile View Switcher
+    let mobileView = 'list';
+    function toggleMobileView(forceView) {
+      const sidebar = document.getElementById('sidebar');
+      const toggleIcon = document.getElementById('toggleIcon');
+      const toggleText = document.getElementById('toggleText');
+
+      if (forceView) {
+        mobileView = forceView;
+      } else {
+        mobileView = mobileView === 'list' ? 'map' : 'list';
+      }
+
+      if (mobileView === 'map') {
+        sidebar.classList.add('hidden');
+        toggleIcon.className = 'fa-solid fa-list-ul';
+        toggleText.innerText = '切換列表';
+      } else {
+        sidebar.classList.remove('hidden');
+        toggleIcon.className = 'fa-solid fa-map-location-dot';
+        toggleText.innerText = '切換地圖';
+      }
+
+      setTimeout(() => { map.invalidateSize(); }, 200);
+    }
+
+    document.getElementById('detailModal').addEventListener('click', (e) => {
+      if (e.target.id === 'detailModal') closeModal();
+    });
+
+    // Start map on window load
+    window.onload = function () {
+      initMap();
+    };
+  </script>
+</body>
+</html>
